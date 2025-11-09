@@ -10,7 +10,9 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "@mdi/font": "^7.4.47",
     "@supabase/supabase-js": "^2.80.0",
+    "axios": "^1.13.2",
     "dayjs": "^1.11.19",
     "nuxt": "^4.2.1",
     "sass": "^1.93.3",
