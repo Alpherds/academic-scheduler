@@ -1,35 +1,78 @@
-// /composables/useAuth.ts
+// /app/composables/useAuth.ts
 import { ref } from 'vue'
 import type { Session, User } from '@supabase/supabase-js'
 import { useSupabase } from '@/composables/useSupabase'
 
 const currentUser = ref<User | null>(null)
 const userRole = ref<string | null>(null)
+const loading = ref(false)
+const error = ref<string | null>(null)
 
 export function useAuthComposable() {
   const { supabase } = useSupabase()
 
   async function init() {
-    const { data } = await supabase.auth.getUser()
-    currentUser.value = data?.user ?? null
-    if (currentUser.value) await fetchUserRole(currentUser.value.id)
-    supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
-      currentUser.value = session?.user ?? null
-      if (session?.user) fetchUserRole(session.user.id)
-      else userRole.value = null
-    })
+    try {
+      const { data } = await supabase.auth.getUser()
+      currentUser.value = data?.user ?? null
+      if (currentUser.value) await fetchUserRole(currentUser.value.id)
+
+      supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
+        currentUser.value = session?.user ?? null
+        if (session?.user) fetchUserRole(session.user.id)
+        else userRole.value = null
+      })
+    } catch (e: any) {
+      console.error('[Auth Init Error]', e.message)
+    }
   }
 
   async function fetchUserRole(userId: string) {
-    const { data, error } = await supabase.from('users').select('role').eq('id', userId).single()
-    if (!error && data) userRole.value = data.role
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle() // ✅ safe version of single()
+
+      if (fetchError) {
+        console.error('[fetchUserRole error]', fetchError.message)
+        userRole.value = null
+        return
+      }
+
+      if (!data) {
+        console.warn('[fetchUserRole] No role found for', userId)
+        userRole.value = null
+        return
+      }
+
+      userRole.value = data.role
+      console.log('[Role Fetched]', userRole.value)
+    } catch (err: any) {
+      console.error('[fetchUserRole Fatal]', err.message)
+    }
   }
 
   async function signIn(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw error
+    loading.value = true
+    error.value = null
+
+    const { data, error: loginError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (loginError) {
+      error.value = loginError.message
+      loading.value = false
+      return null
+    }
+
     currentUser.value = data.user ?? null
     if (data.user) await fetchUserRole(data.user.id)
+
+    loading.value = false
     return data.user
   }
 
@@ -39,5 +82,5 @@ export function useAuthComposable() {
     userRole.value = null
   }
 
-  return { currentUser, userRole, init, signIn, signOut }
+  return { currentUser, userRole, loading, error, init, signIn, signOut }
 }
