@@ -1,64 +1,26 @@
-// server/api/check-conflict.post.ts
-import { defineEventHandler, readBody } from 'h3'
-import type { IncomingMessage } from 'http'
+// /server/api/check-conflict.post.ts
+import { readBody } from 'h3'
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NUXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || ''
+const url = process.env.NUXT_PUBLIC_SUPABASE_URL || ''
+const key = process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event) as {
-    faculty_id?: string
-    room_id?: string
-    day: string
-    start_time: string
-    end_time: string
-    department_id?: string
-    schedule_id?: string | null
-  }
-
-  // Basic validation
-  if (!body.day || !body.start_time || !body.end_time) {
-    throw createError({ statusCode: 400, statusMessage: 'Missing required fields' })
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-  // Query schedules that overlap
-  let query = supabase
-    .from('schedules')
-    .select('*')
-    .eq('day', body.day)
-
-  if (body.department_id) {
-    query = query.eq('department_id', body.department_id)
-  }
-
-  if (body.schedule_id) {
-    query = query.not('id', 'eq', body.schedule_id)
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    throw createError({ statusCode: 500, statusMessage: String(error.message) })
-  }
-
-  const overlapping: any[] = []
-
-  const startA = body.start_time
-  const endA = body.end_time
-
+  const body = await readBody(event)
+  if (!body) throw createError({ statusCode:400, statusMessage: 'Missing body' })
+  const { faculty_id, room_id, day, start_time, end_time, department_id, schedule_id } = body as any
+  const supabase = createClient(url, key)
+  let q = supabase.from('schedules').select('*').eq('day', day)
+  if (department_id) q = q.eq('department_id', department_id)
+  if (schedule_id) q = q.not('id', 'eq', schedule_id)
+  const { data, error } = await q
+  if (error) throw createError({ statusCode:500, statusMessage: error.message })
+  const conflicts = []
   for (const s of data || []) {
-    // check overlap: startA < s.end_time && s.start_time < endA
-    if (startA < s.end_time && s.start_time < endA) {
-      if (body.faculty_id && s.faculty_id === body.faculty_id) {
-        overlapping.push({ type: 'faculty', schedule: s })
-      } else if (body.room_id && s.room_id === body.room_id) {
-        overlapping.push({ type: 'room', schedule: s })
-      }
+    if (start_time < s.end_time && s.start_time < end_time) {
+      if (faculty_id && s.faculty_id === faculty_id) conflicts.push({ type:'faculty', schedule: s })
+      if (room_id && s.room_id === room_id) conflicts.push({ type:'room', schedule: s })
     }
   }
-
-  return { conflicts: overlapping }
+  return { conflicts }
 })

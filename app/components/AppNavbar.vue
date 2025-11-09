@@ -9,21 +9,15 @@
           </v-btn>
         </v-col>
         <v-col cols="6" class="d-flex justify-end">
-          <v-btn icon @click="goNotifications">
-            <v-icon>mdi-bell</v-icon>
-          </v-btn>
+          <v-btn icon @click="goNotifications"><v-icon>mdi-bell</v-icon></v-btn>
           <v-menu>
             <template #activator="{ props }">
               <v-btn v-bind="props" icon>
-                <v-avatar size="32">
-                  <span class="white--text">{{ initials }}</span>
-                </v-avatar>
+                <v-avatar size="32"><span class="white--text">{{ initials }}</span></v-avatar>
               </v-btn>
             </template>
             <v-list>
-              <v-list-item @click="signOut">
-                <v-list-item-title>Sign out</v-list-item-title>
-              </v-list-item>
+              <v-list-item @click="signOut"><v-list-item-title>Sign out</v-list-item-title></v-list-item>
             </v-list>
           </v-menu>
         </v-col>
@@ -33,29 +27,18 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useAuthComposable } from '@/composables/useAuth'
-import { ref } from 'vue'
-const initials = ref('AD')
 
-function goHome() {
-  navigateTo('/')
-}
-function goNotifications() {
-  navigateTo('/notifications')
-}
-function signOut() {
-  const { signOut } = useAuthComposable()
-  signOut()
-  navigateTo('/login')
-}
+const { currentUser, signOut } = useAuthComposable()
+const initials = computed(() => {
+  const n = currentUser.value?.user_metadata?.full_name || currentUser.value?.email || 'U'
+  return String(n).split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase()
+})
+function goHome() { navigateTo('/') }
+function goNotifications() { navigateTo('/notifications') }
 </script>
 
 <style scoped>
-.v-avatar {
-  background: #1E88E5;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-weight:600;
-}
+.v-avatar { background: #1E88E5; display:flex; align-items:center; justify-content:center; font-weight:600; }
 </style>
