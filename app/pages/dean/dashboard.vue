@@ -1,29 +1,19 @@
 <template>
-  <v-app>
-    <v-main class="bg-grey-lighten-4">
-      <v-container fluid class="pa-6">
+  <v-container fluid class="pa-6">
+    <PageHeader
+      title="Dean Dashboard"
+      subtitle="Overview of Faculty, Classes, and Schedules"
+    >
+      <template #actions>
+        <v-btn color="primary" variant="flat" prepend-icon="mdi-plus">
+          Add Schedule
+        </v-btn>
+      </template>
+    </PageHeader>
 
-        <!-- HEADER -->
-        <PageHeader
-          title="Dean Dashboard"
-          subtitle="Overview of Faculty, Classes, and Schedules"
-        >
-          <template #actions>
-            <v-btn color="primary" variant="flat" prepend-icon="mdi-plus">
-              Add Schedule
-            </v-btn>
-          </template>
-        </PageHeader>
-
-        <!-- STATS -->
-        <DashboardStats :cards="cards" class="mb-8" />
-
-        <!-- SCHEDULE TABLE -->
-        <ScheduleTable :schedules="schedules" />
-
-      </v-container>
-    </v-main>
-  </v-app>
+    <DashboardStats :cards="cards" class="mb-8" />
+    <ScheduleTable :schedules="schedules" />
+  </v-container>
 </template>
 
 <script setup lang="ts">

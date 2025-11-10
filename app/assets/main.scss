@@ -1,3 +1,38 @@
-/* assets/main.scss */
-@import 'vuetify/styles';
-body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+body {
+  background-color: #f9fafb;
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+}
+
+.v-application {
+  background: #f9fafb !important;
+}
+
+.v-card {
+  border-radius: 12px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+}
+
+.v-data-table th {
+  font-weight: 600 !important;
+}
+
+.dashboard-card-icon {
+  background: #E3F2FD;
+  border-radius: 50%;
+  padding: 10px;
+}
+
+@media (max-width: 1024px) {
+  .v-navigation-drawer {
+    width: 72px !important;
+  }
+  .v-list-item-title {
+    display: none !important;
+  }
+}
+
+.v-main {
+  background: linear-gradient(180deg, #f9fafb 0%, #eef3ff 100%);
+  min-height: 100vh;
+}

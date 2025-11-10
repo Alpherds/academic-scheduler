@@ -8,7 +8,7 @@
       <v-card class="pa-6" max-width="420" elevation="3" rounded="lg">
         <!-- Logo + Title -->
         <div class="text-center mb-6">
-          <v-img src="/logo.png" alt="SNC Logo" max-width="80" class="mx-auto mb-2" />
+          <v-img src="/logo.png" alt="SNC Logo" max-width="200" class="mx-auto mb-2" />
           <h2 class="text-h5 font-weight-bold text-primary">SNC Academic Scheduler</h2>
           <p class="text-subtitle-2 mt-1 text-grey-darken-1">
             Sign in to manage your schedules

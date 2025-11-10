@@ -1,6 +1,6 @@
-// /app/composables/useAuth.ts
+// /composables/useAuth.ts
 import { ref } from 'vue'
-import type { Session, User } from '@supabase/supabase-js'
+import type { User, Session } from '@supabase/supabase-js'
 import { useSupabase } from '@/composables/useSupabase'
 
 const currentUser = ref<User | null>(null)
@@ -9,7 +9,7 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 
 export function useAuthComposable() {
-  const { supabase } = useSupabase()
+  const supabase = useSupabase()
 
   async function init() {
     try {
@@ -33,7 +33,7 @@ export function useAuthComposable() {
         .from('users')
         .select('role')
         .eq('id', userId)
-        .maybeSingle() // ✅ safe version of single()
+        .maybeSingle()
 
       if (fetchError) {
         console.error('[fetchUserRole error]', fetchError.message)
@@ -41,14 +41,7 @@ export function useAuthComposable() {
         return
       }
 
-      if (!data) {
-        console.warn('[fetchUserRole] No role found for', userId)
-        userRole.value = null
-        return
-      }
-
-      userRole.value = data.role
-      console.log('[Role Fetched]', userRole.value)
+      userRole.value = data?.role ?? null
     } catch (err: any) {
       console.error('[fetchUserRole Fatal]', err.message)
     }
