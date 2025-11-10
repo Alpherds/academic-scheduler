@@ -1,6 +1,6 @@
 // /app/composables/dean/useTeachers.ts
 import { ref } from 'vue'
-import { useSupabase } from '@/composables/useSupabase'
+import { useSupabase } from '~/composables/useSupabase'
 
 interface Subject {
   id: string
@@ -13,8 +13,8 @@ interface Teacher {
   full_name: string
   email: string
   bio?: string
-  subjects?: Subject[]
-  subject_ids?: string[]
+  role?: string
+  allowed_subjects: (Subject | string)[]
 }
 
 export function useTeachers() {
@@ -22,92 +22,89 @@ export function useTeachers() {
   const teachers = ref<Teacher[]>([])
   const subjects = ref<Subject[]>([])
   const loading = ref(false)
-  const success = ref<string | null>(null)
   const error = ref<string | null>(null)
+  const success = ref<string | null>(null)
 
   const form = ref<Teacher>({
     full_name: '',
     email: '',
     bio: '',
-    subject_ids: [],
+    role: 'faculty',
+    allowed_subjects: [],
   })
 
-  // ✅ Fetch all teachers
+  /* ========================================
+     🔹 FETCH SUBJECTS
+  ======================================== */
+  async function fetchSubjects() {
+    try {
+      const { data, error: err } = await supabase
+        .from('subjects')
+        .select('id, code, name')
+        .order('code', { ascending: true })
+      if (err) throw err
+      subjects.value = data ?? []
+    } catch (err: any) {
+      error.value = err.message
+    }
+  }
+
+  /* ========================================
+     🔹 FETCH TEACHERS
+  ======================================== */
   async function fetchTeachers() {
     try {
       loading.value = true
-      const { data: userData, error: userErr } = await supabase
+      const { data, error: err } = await supabase
         .from('users')
-        .select('id, full_name, email, bio, role')
+        .select(`
+          id,
+          full_name,
+          email,
+          bio,
+          role,
+          faculty_subjects (
+            subject_id,
+            subjects ( id, code, name )
+          )
+        `)
         .eq('role', 'faculty')
         .order('full_name', { ascending: true })
 
-      if (userErr) throw userErr
+      if (err) throw err
 
-      const { data: fsData, error: fsErr } = await supabase
-        .from('faculty_subjects')
-        .select('faculty_id, subject_id, subjects(id, code, name)')
-
-      if (fsErr) throw fsErr
-
-      const map: Record<string, Teacher> = {}
-      userData.forEach((t) => {
-        map[t.id] = {
-          id: t.id,
-          full_name: t.full_name,
-          email: t.email,
-          bio: t.bio || '',
-          subjects: [],
-        }
-      })
-
-      fsData.forEach((fs) => {
-        const teacher = map[fs.faculty_id]
-        if (!teacher) return
-        const subs = Array.isArray(fs.subjects) ? fs.subjects : [fs.subjects]
-        subs.filter(Boolean).forEach((sub) => {
-          teacher.subjects?.push({
-            id: sub.id,
-            code: sub.code,
-            name: sub.name,
-          })
-        })
-      })
-
-      teachers.value = Object.values(map)
-    } catch (e: any) {
-      console.error('[fetchTeachers error]', e.message)
-      error.value = e.message
+      teachers.value =
+        data?.map((t: any) => ({
+          ...t,
+          allowed_subjects:
+            t.faculty_subjects
+              ?.filter((fs: any) => fs?.subjects !== null)
+              ?.map((fs: any) => ({
+                id: fs.subjects?.id ?? '',
+                code: fs.subjects?.code ?? '',
+                name: fs.subjects?.name ?? '',
+              })) ?? [],
+        })) ?? []
+    } catch (err: any) {
+      console.error('[fetchTeachers error]', err.message)
+      error.value = err.message
     } finally {
       loading.value = false
     }
   }
 
-  // ✅ Fetch all subjects
-  async function fetchSubjects() {
-    try {
-      const { data, error: subErr } = await supabase
-        .from('subjects')
-        .select('id, code, name')
-        .order('code', { ascending: true })
-      if (subErr) throw subErr
-      subjects.value = data ?? []
-    } catch (e: any) {
-      console.error('[fetchSubjects error]', e.message)
-      error.value = e.message
-    }
-  }
-
-  // ✅ Insert or update teacher
+  /* ========================================
+     🔹 SAVE OR UPDATE TEACHER
+  ======================================== */
   async function saveTeacher(isEdit: boolean) {
     try {
       loading.value = true
       error.value = null
       success.value = null
 
-      // -- UPDATE EXISTING --
       if (isEdit && form.value.id) {
-        const { error: upErr } = await supabase
+        // --- Update teacher info
+        const { error: updateError } = await supabase
           .from('users')
           .update({
             full_name: form.value.full_name,
@@ -115,16 +112,14 @@ export function useTeachers() {
             bio: form.value.bio,
           })
           .eq('id', form.value.id)
+        if (updateError) throw updateError
 
-        if (upErr) throw upErr
-
-        await updateFacultySubjects(form.value.id, [...(form.value.subject_ids ?? [])])
+        // --- Update allowed subjects
+        await updateFacultySubjects(form.value.id, form.value.allowed_subjects)
         success.value = 'Teacher updated successfully!'
-      } 
-      
-      // -- CREATE NEW --
-      else {
-        const { data: newUser, error: insErr } = await supabase
+      } else {
+        // --- Create teacher record
+        const { data: insertedUsers, error: insertError } = await supabase
           .from('users')
           .insert([
             {
@@ -134,92 +129,128 @@ export function useTeachers() {
               role: 'faculty',
             },
           ])
-          .select('id')
-          .single()
+          .select()
 
-        if (insErr) throw insErr
+        if (insertError) throw insertError
 
-        const facultyId = newUser?.id
-        if (!facultyId) throw new Error('No faculty ID returned.')
+        // --- Make sure Supabase returned the new user
+        const newUser = insertedUsers?.[0]
+        if (!newUser?.id) throw new Error('Failed to retrieve new user ID')
 
-        // ✅ Delay to ensure Supabase propagation (prevents FK constraint timing)
-        await new Promise((resolve) => setTimeout(resolve, 200))
-
-        // ✅ Save allowed subjects (if any)
-        if (form.value.subject_ids && form.value.subject_ids.length > 0) {
-          await updateFacultySubjects(facultyId, [...form.value.subject_ids])
+        // --- Insert allowed subjects if any
+        if (form.value.allowed_subjects?.length > 0) {
+          await updateFacultySubjects(newUser.id, form.value.allowed_subjects)
         }
 
-        success.value = 'Teacher added successfully!'
+        // --- Add instantly to local state
+        teachers.value.push({
+          id: newUser.id,
+          full_name: newUser.full_name,
+          email: newUser.email,
+          bio: newUser.bio,
+          role: 'faculty',
+          allowed_subjects: form.value.allowed_subjects ?? [],
+        })
+
+        success.value = 'Teacher created successfully!'
       }
 
-      // ✅ Refetch and reset form after insert/update
-      await fetchTeachers()
+      await fetchTeachers() // refresh UI
       resetForm()
-    } catch (e: any) {
-      console.error('[saveTeacher error]', e.message)
-      error.value = e.message
+    } catch (err: any) {
+      console.error('[saveTeacher error]', err.message)
+      error.value = err.message
     } finally {
       loading.value = false
     }
   }
 
-  // ✅ Manage subject assignments
-  async function updateFacultySubjects(facultyId: string, subjectIds: string[]) {
+  /* ========================================
+     🔹 UPDATE FACULTY SUBJECTS (FIXED)
+  ======================================== */
+  async function updateFacultySubjects(
+    facultyId: string,
+    allowedSubjects: (Subject | string)[]
+  ) {
     try {
-      await supabase.from('faculty_subjects').delete().eq('faculty_id', facultyId)
-
-      if (subjectIds.length > 0) {
-        const rows = subjectIds.map((sid) => ({
-          faculty_id: facultyId,
-          subject_id: sid,
-        }))
-        const { error: insertErr } = await supabase.from('faculty_subjects').insert(rows)
-        if (insertErr) throw insertErr
-      }
-    } catch (e: any) {
-      console.error('[updateFacultySubjects error]', e.message)
-    }
-  }
-
-  // ✅ Delete teacher
-  async function deleteTeacher(id: string) {
-    try {
-      loading.value = true
-      await supabase.from('faculty_subjects').delete().eq('faculty_id', id)
-      const { error: delErr } = await supabase.from('users').delete().eq('id', id)
+      // --- Delete old relationships first
+      const { error: delErr } = await supabase
+        .from('faculty_subjects')
+        .delete()
+        .eq('faculty_id', facultyId)
       if (delErr) throw delErr
 
-      success.value = 'Teacher deleted successfully!'
-      await fetchTeachers()
-    } catch (e: any) {
-      console.error('[deleteTeacher error]', e.message)
-      error.value = e.message
-    } finally {
-      loading.value = false
+      if (!allowedSubjects?.length) return
+
+      // --- Handle both string IDs and full objects
+      const insertData = allowedSubjects.map((s) => ({
+        faculty_id: facultyId,
+        subject_id: typeof s === 'string' ? s : s.id,
+      }))
+
+      console.log('[updateFacultySubjects] inserting:', insertData)
+
+      const { error: insertErr } = await supabase
+        .from('faculty_subjects')
+        .insert(insertData)
+      if (insertErr) throw insertErr
+
+      console.log('[updateFacultySubjects] success for faculty_id:', facultyId)
+    } catch (err: any) {
+      console.error('[updateFacultySubjects error]', err.message)
+      throw err
     }
   }
 
-  // ✅ Edit form helper
+  /* ========================================
+     🔹 DELETE TEACHER
+  ======================================== */
+  async function deleteTeacher(id: string | undefined) {
+    if (!id) return
+    try {
+      const { error: delErr } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', id)
+      if (delErr) throw delErr
+      teachers.value = teachers.value.filter((t) => t.id !== id)
+      success.value = 'Teacher deleted successfully!'
+    } catch (err: any) {
+      console.error('[deleteTeacher error]', err.message)
+      error.value = err.message
+    }
+  }
+
+  /* ========================================
+     🔹 EDIT + RESET
+  ======================================== */
   function editTeacher(item: Teacher) {
     form.value = {
       id: item.id,
       full_name: item.full_name,
       email: item.email,
       bio: item.bio ?? '',
-      subject_ids: item.subjects?.map((s) => s.id) ?? [],
+      role: 'faculty',
+      allowed_subjects: item.allowed_subjects.map((s) =>
+        typeof s === 'string'
+          ? s
+          : {
+              id: s.id,
+              code: s.code,
+              name: s.name,
+            }
+      ),
     }
   }
 
-  // ✅ Reset form
   function resetForm() {
-    form.value = { full_name: '', email: '', bio: '', subject_ids: [] }
-  }
-
-  // ✅ Initialize
-  async function init() {
-    await fetchSubjects()
-    await fetchTeachers()
+    form.value = {
+      full_name: '',
+      email: '',
+      bio: '',
+      role: 'faculty',
+      allowed_subjects: [],
+    }
   }
 
   return {
@@ -227,9 +258,10 @@ export function useTeachers() {
     subjects,
     form,
     loading,
-    success,
     error,
-    init,
+    success,
+    fetchTeachers,
+    fetchSubjects,
     saveTeacher,
     deleteTeacher,
     editTeacher,

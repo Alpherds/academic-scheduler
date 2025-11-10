@@ -1,6 +1,6 @@
 <template>
   <v-container fluid class="pa-6">
-    <!-- ✅ Snackbar Alert -->
+    <!-- ✅ Alert -->
     <transition name="slide-fade">
       <v-alert
         v-if="alert.show"
@@ -14,12 +14,12 @@
       </v-alert>
     </transition>
 
-    <!-- Header -->
+    <!-- HEADER -->
     <v-row class="align-center justify-space-between mb-4">
       <v-col cols="12" md="6">
         <h2 class="text-h5 font-weight-bold">Teachers Management</h2>
         <p class="text-body-2 text-medium-emphasis">
-          Manage teachers and their allowed subjects.
+          Manage faculty members and their allowed subjects.
         </p>
       </v-col>
       <v-col cols="12" md="6" class="text-md-end text-center">
@@ -30,7 +30,7 @@
       </v-col>
     </v-row>
 
-    <!-- Teachers Table -->
+    <!-- TABLE -->
     <v-card>
       <v-data-table
         :headers="headers"
@@ -39,25 +39,18 @@
         class="elevation-1"
         density="comfortable"
       >
-        <template #item.subjects="{ item }">
-          <div class="d-flex flex-wrap">
-            <v-chip
-              v-for="subject in item.subjects"
-              :key="subject.id"
-              size="small"
-              color="primary"
-              variant="outlined"
-              class="ma-1"
-            >
-              {{ subject.code }}
-            </v-chip>
-          </div>
+        <template #item.allowed_subjects="{ item }">
+          <v-chip
+            v-for="(subject, index) in item.allowed_subjects"
+            :key="index"
+            class="ma-1 bg-primary text-white"
+            size="small"
+          >
+            {{ typeof subject === 'string' ? subject : subject.name }}
+          </v-chip>
         </template>
 
         <template #item.actions="{ item }">
-          <v-btn icon variant="text" color="info" @click="viewTeacher(item)">
-            <v-icon>mdi-eye</v-icon>
-          </v-btn>
           <v-btn icon variant="text" color="primary" @click="openDialog(true, item)">
             <v-icon>mdi-pencil</v-icon>
           </v-btn>
@@ -68,29 +61,18 @@
       </v-data-table>
     </v-card>
 
-    <!-- Add/Edit Dialog -->
-    <v-dialog v-model="dialog" max-width="600">
+    <!-- ADD / EDIT DIALOG -->
+    <v-dialog v-model="dialog" max-width="700">
       <v-card>
         <v-card-title>{{ editMode ? 'Edit Teacher' : 'Add Teacher' }}</v-card-title>
         <v-card-text>
           <v-form>
             <v-row>
-              <v-col cols="12">
-                <v-text-field
-                  v-model="form.full_name"
-                  label="Full Name"
-                  variant="outlined"
-                  required
-                />
+              <v-col cols="12" md="6">
+                <v-text-field v-model="form.full_name" label="Full Name" variant="outlined" />
               </v-col>
-              <v-col cols="12">
-                <v-text-field
-                  v-model="form.email"
-                  label="Email"
-                  type="email"
-                  variant="outlined"
-                  required
-                />
+              <v-col cols="12" md="6">
+                <v-text-field v-model="form.email" label="Email" type="email" variant="outlined" />
               </v-col>
               <v-col cols="12">
                 <v-textarea
@@ -98,19 +80,38 @@
                   label="Bio"
                   variant="outlined"
                   auto-grow
+                  rows="2"
                 />
               </v-col>
               <v-col cols="12">
-                <v-select
-                  v-model="form.subject_ids"
+                <v-autocomplete
+                  v-model="form.allowed_subjects"
                   :items="subjects"
                   item-title="name"
                   item-value="id"
                   label="Allowed Subjects"
                   multiple
                   chips
+                  clearable
+                  density="comfortable"
                   variant="outlined"
-                />
+                  hide-selected
+                  :search-input.sync="searchSubject"
+                  prepend-inner-icon="mdi-magnify"
+                  :loading="subjectsLoading"
+                  placeholder="Search subjects..."
+                >
+                  <template #chip="{ props, item }">
+                    <v-chip
+                      v-bind="props"
+                      class="bg-primary text-white"
+                      size="small"
+                      closable
+                    >
+                      {{ item.raw.name }}
+                    </v-chip>
+                  </template>
+                </v-autocomplete>
               </v-col>
             </v-row>
           </v-form>
@@ -122,38 +123,7 @@
       </v-card>
     </v-dialog>
 
-    <!-- View Dialog -->
-    <v-dialog v-model="viewDialog.show" max-width="480">
-      <v-card>
-        <v-card-title class="text-h6 font-weight-bold">
-          {{ viewDialog.item?.full_name }}
-        </v-card-title>
-        <v-card-subtitle>{{ viewDialog.item?.email }}</v-card-subtitle>
-        <v-card-text>
-          <p class="mb-2"><strong>Bio:</strong> {{ viewDialog.item?.bio || 'N/A' }}</p>
-          <div>
-            <strong>Allowed Subjects:</strong>
-            <div class="mt-2">
-              <v-chip
-                v-for="sub in viewDialog.item?.subjects"
-                :key="sub.id"
-                color="primary"
-                variant="outlined"
-                size="small"
-                class="ma-1"
-              >
-                {{ sub.code }}
-              </v-chip>
-            </div>
-          </div>
-        </v-card-text>
-        <v-card-actions class="justify-end">
-          <v-btn text @click="viewDialog.show = false">Close</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
-    <!-- Confirm Delete -->
+    <!-- DELETE DIALOG -->
     <v-dialog v-model="confirmDialog.show" max-width="420">
       <v-card>
         <v-card-title class="text-h6 font-weight-bold">Confirm Deletion</v-card-title>
@@ -172,8 +142,8 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
-import { useTeachers } from '@/composables/dean/useTeachers'
-
+import { useTeachers } from '~/composables/dean/useTeachers'
+import { useSupabase } from '~/composables/useSupabase'
 
 type AlertType = 'success' | 'error' | 'info' | 'warning'
 
@@ -182,9 +152,10 @@ const {
   subjects,
   form,
   loading,
-  success,
   error,
-  init,
+  success,
+  fetchTeachers,
+  fetchSubjects,
   saveTeacher,
   deleteTeacher,
   editTeacher,
@@ -192,7 +163,6 @@ const {
 } = useTeachers()
 
 const dialog = ref(false)
-const viewDialog = ref({ show: false, item: null as any })
 const editMode = ref(false)
 const confirmDialog = ref({ show: false, item: null as any })
 const alert = ref<{ show: boolean; type: AlertType; message: string }>({
@@ -200,19 +170,22 @@ const alert = ref<{ show: boolean; type: AlertType; message: string }>({
   type: 'success',
   message: '',
 })
+const searchSubject = ref('')
+const subjectsLoading = ref(false)
 
-watch(success, (v) => v && showAlert(v, 'success'))
-watch(error, (v) => v && showAlert(v, 'error'))
+watch(success, (val) => val && showAlert(val, 'success'))
+watch(error, (val) => val && showAlert(val, 'error'))
 
-function showAlert(msg: string, type: AlertType) {
-  alert.value = { show: true, type, message: msg }
+function showAlert(message: string, type: AlertType) {
+  alert.value = { show: true, message, type }
   setTimeout(() => (alert.value.show = false), 3000)
 }
 
 const headers = [
   { title: 'Name', key: 'full_name' },
   { title: 'Email', key: 'email' },
-  { title: 'Allowed Subjects', key: 'subjects', sortable: false },
+  { title: 'Bio', key: 'bio' },
+  { title: 'Allowed Subjects', key: 'allowed_subjects' },
   { title: 'Actions', key: 'actions', sortable: false },
 ]
 
@@ -221,30 +194,28 @@ function openDialog(isEdit: boolean, item?: any) {
   if (isEdit && item) editTeacher(item)
   dialog.value = true
 }
+
 function closeDialog() {
   dialog.value = false
   resetForm()
 }
+
 async function handleSave() {
   await saveTeacher(editMode.value)
   dialog.value = false
 }
+
 function confirmDelete(item: any) {
   confirmDialog.value = { show: true, item }
 }
+
 async function handleDelete() {
   await deleteTeacher(confirmDialog.value.item?.id)
   confirmDialog.value.show = false
 }
-function viewTeacher(item: any) {
-  viewDialog.value = { show: true, item }
-}
 
-onMounted(init)
+onMounted(() => {
+  fetchSubjects()
+  fetchTeachers()
+})
 </script>
-
-<style scoped>
-.v-chip {
-  font-size: 0.8rem;
-}
-</style>
