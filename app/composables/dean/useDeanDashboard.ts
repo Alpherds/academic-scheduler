@@ -1,39 +1,57 @@
-// /composables/dean/useDeanDashboard.ts
+// /app/composables/dean/useDeanDashboard.ts
 import { ref } from 'vue'
 import { useSupabase } from '@/composables/useSupabase'
 
-interface StatItem { title: string; value: number; icon: string }
-interface AuditLog { id: string; action: string; created_at: string }
-
 export function useDeanDashboard() {
   const { supabase } = useSupabase()
-  const stats = ref<StatItem[]>([
-    { title: 'Faculty', value: 0, icon: 'mdi-account-tie' },
-    { title: 'Subjects', value: 0, icon: 'mdi-book-open' },
-    { title: 'Classes', value: 0, icon: 'mdi-account-group' },
-    { title: 'Schedules', value: 0, icon: 'mdi-calendar' },
-  ])
-  const logs = ref<AuditLog[]>([])
 
-  async function loadStats() {
+  const facultyCount = ref<number>(0)
+  const classCount = ref<number>(0)
+  const subjectCount = ref<number>(0)
+  const scheduleCount = ref<number>(0)
+  const schedules = ref<any[]>([])
+  const loading = ref(false)
+  const error = ref<string | null>(null)
+
+  async function fetchDashboardData() {
     try {
-      const results = await Promise.all([
-        supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'faculty'),
-        supabase.from('subjects').select('*', { count: 'exact', head: true }),
-        supabase.from('classes').select('*', { count: 'exact', head: true }),
-        supabase.from('schedules').select('*', { count: 'exact', head: true }),
+      loading.value = true
+      error.value = null
+
+      const [faculty, classes, subjects, scheds] = await Promise.all([
+        supabase.from('users').select('id', { count: 'exact' }).eq('role', 'faculty'),
+        supabase.from('classes').select('id', { count: 'exact' }),
+        supabase.from('subjects').select('id', { count: 'exact' }),
+        supabase
+          .from('schedules')
+          .select(`id, day, start_time, end_time, 
+                   subjects(name), 
+                   classes(name, section), 
+                   rooms(name), 
+                   users(full_name)`),
       ])
-      stats.value[0]!.value = results[0]?.count ?? 0
-      stats.value[1]!.value = results[1]?.count ?? 0
-      stats.value[2]!.value = results[2]?.count ?? 0
-      stats.value[3]!.value = results[3]?.count ?? 0
-    } catch (e) { console.error(e) }
+
+      facultyCount.value = faculty.count ?? 0
+      classCount.value = classes.count ?? 0
+      subjectCount.value = subjects.count ?? 0
+      scheduleCount.value = scheds.data?.length ?? 0
+      schedules.value = scheds.data ?? []
+    } catch (e: any) {
+      console.error('[DeanDashboard Error]', e.message)
+      error.value = 'Failed to load dashboard data.'
+    } finally {
+      loading.value = false
+    }
   }
 
-  async function loadLogs() {
-    const { data, error } = await supabase.from('audit_logs').select('id, action, created_at').order('created_at', { ascending: false }).limit(5)
-    if (!error && data) logs.value = data
+  return {
+    facultyCount,
+    classCount,
+    subjectCount,
+    scheduleCount,
+    schedules,
+    loading,
+    error,
+    fetchDashboardData
   }
-
-  return { stats, logs, loadStats, loadLogs }
 }
