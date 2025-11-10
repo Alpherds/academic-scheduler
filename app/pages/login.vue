@@ -1,5 +1,6 @@
 <template>
   <v-app>
+    
     <v-container
       fluid
       class="d-flex align-center justify-center fill-height"
@@ -72,6 +73,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useAuthComposable } from '@/composables/useAuth'
+
+
 
 definePageMeta({ layout: false })
 
