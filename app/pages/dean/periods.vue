@@ -19,7 +19,7 @@
       <v-col cols="12" md="6">
         <h2 class="text-h5 font-weight-bold">Periods Management</h2>
         <p class="text-body-2 text-medium-emphasis">
-          Manage your department’s class periods — automatic duration, smooth updates, and no refresh needed.
+          Manage your department’s class periods.
         </p>
       </v-col>
       <v-col cols="12" md="6" class="text-md-end text-center">
@@ -163,7 +163,7 @@ function showAlert(message: string, type: AlertType) {
 }
 
 const headers = [
-  { title: 'Period #', key: 'period_number' },
+  { title: 'Period No.', key: 'period_number' },
   { title: 'Start', key: 'start_time' },
   { title: 'End', key: 'end_time' },
   { title: 'Duration (min)', key: 'duration_minutes' },
