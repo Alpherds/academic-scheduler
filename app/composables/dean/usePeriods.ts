@@ -156,7 +156,7 @@ export function usePeriods() {
     if (err) {
       error.value = err.message
     } else {
-      error.value = 'Period deleted successfully!'
+      success.value = 'Period deleted successfully!'
       periods.value = periods.value.filter((p) => p.id !== id)
     }
   }
