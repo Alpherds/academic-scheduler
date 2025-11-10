@@ -1,3 +1,4 @@
+/* ---------- GLOBAL BASE ---------- */
 body {
   background-color: #f9fafb;
   font-family: 'Inter', sans-serif;
@@ -8,31 +9,124 @@ body {
   background: #f9fafb !important;
 }
 
+/* ---------- CARDS / GENERAL ---------- */
 .v-card {
   border-radius: 12px !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
 }
 
-.v-data-table th {
-  font-weight: 600 !important;
-}
-
-.dashboard-card-icon {
-  background: #E3F2FD;
-  border-radius: 50%;
-  padding: 10px;
-}
-
-@media (max-width: 1024px) {
-  .v-navigation-drawer {
-    width: 72px !important;
-  }
-  .v-list-item-title {
-    display: none !important;
-  }
+/* ---------- NAVBAR ---------- */
+.v-app-bar {
+  padding-left: 16px !important;
+  padding-right: 24px !important;
+  border-bottom: 1px solid #e0e0e0 !important;
 }
 
 .v-main {
   background: linear-gradient(180deg, #f9fafb 0%, #eef3ff 100%);
   min-height: 100vh;
+  overflow-y: auto;
+  padding-bottom: 80px;
+}
+
+/* ---------- SIDEBAR GENERAL ---------- */
+.v-navigation-drawer {
+  border-right: 1px solid #e0e0e0 !important;
+  transition: width 0.25s ease !important;
+}
+
+.v-list-item {
+  font-weight: 500;
+  color: #2c3e50;
+  border-radius: 8px !important;
+  margin: 4px 8px !important;
+  padding-left: 16px !important;
+  transition: background-color 0.2s ease;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.v-list-item:hover {
+  background-color: #f5f7fb !important;
+}
+
+.v-list-item--active {
+  color: #fff !important;
+  background-color: #1E88E5 !important;
+  font-weight: 600 !important;
+}
+
+.v-list-item--active .v-icon {
+  color: #fff !important;
+}
+
+/* ---------- RAIL (COLLAPSED) MODE ---------- */
+$drawer-rail-width: 72px !default;
+$active-pill-width: 52px !default;
+$icon-size: 22px !default;
+
+.v-navigation-drawer--rail {
+  width: $drawer-rail-width !important;
+  overflow-x: hidden !important;
+}
+
+/* Icon alignment when collapsed */
+.v-navigation-drawer--rail .v-list-item {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 56px !important;
+  padding: 10px 0 !important;
+  margin: 4px 0 !important;
+  box-sizing: border-box !important;
+}
+
+.v-navigation-drawer--rail .v-list-item .v-icon {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  font-size: $icon-size !important;
+  width: $icon-size !important;
+  height: $icon-size !important;
+  color: #2c3e50 !important;
+  margin: 0 auto !important;
+}
+
+/* Fix: active icon spacing and highlight centered */
+.v-navigation-drawer--rail .v-list-item--active {
+  width: $active-pill-width !important;
+  border-radius: 10px !important;
+  background-color: #1E88E5 !important;
+  color: #fff !important;
+  margin: 0 auto !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+/* Active icon white */
+.v-navigation-drawer--rail .v-list-item--active .v-icon {
+  color: #fff !important;
+}
+
+/* Hide text titles when collapsed */
+.v-navigation-drawer--rail .v-list-item-title {
+  display: none !important;
+}
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width: 1024px) {
+  .v-navigation-drawer {
+    width: 72px !important;
+  }
+
+  .v-list-item-title {
+    display: none !important;
+  }
+
+  .v-avatar {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 0.9rem !important;
+  }
 }
