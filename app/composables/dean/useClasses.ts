@@ -1,277 +1,273 @@
 // /app/composables/dean/useClasses.ts
 import { ref } from 'vue'
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { useSupabase } from '~/composables/useSupabase'
 
+type TeacherInput = { id: string; full_name?: string } | string
+
+interface Teacher {
+  id: string
+  full_name: string
+}
+
+interface Department {
+  id: string
+  name: string
+}
+
 interface ClassRecord {
-  id: string
+  id?: string
   name: string
-  section: string | null
+  section: string
   department_id?: string | null
-  teacher_ids?: string[] | null
-}
-
-interface SubjectRecord {
-  id: string
-  code?: string | null
-  name: string
-  department_id?: string | null
-}
-
-interface UserRecord {
-  id: string
-  full_name?: string | null
-  email?: string | null
-  role?: string | null
-  department_id?: string | null
+  teachers?: Teacher[]
+  department_name?: string
 }
 
 export function useClasses() {
-  // ✅ always non-null using non-null assertion and runtime check
-  const supabase = useSupabase() as SupabaseClient
-  if (!supabase) throw new Error('Supabase client not initialized.')
+  const supabase = useSupabase()
+  const classes = ref<ClassRecord[]>([])
+  const teachers = ref<Teacher[]>([])
+  const departments = ref<Department[]>([])
+  const form = ref<ClassRecord>({
+    name: '',
+    section: '',
+    department_id: null,
+    teachers: [],
+  })
 
-  const classes = ref<any[]>([])
-  const subjects = ref<SubjectRecord[]>([])
-  const teachers = ref<UserRecord[]>([])
   const loading = ref(false)
   const success = ref<string | null>(null)
   const error = ref<string | null>(null)
 
-  const form = ref({
-    id: null as string | null,
-    name: '',
-    section: '',
-    teacher_ids: [] as string[],
-    subject_ids: [] as string[],
-    department_id: null as string | null,
-  })
+  /* ------------------ FETCHERS ------------------ */
 
-  /** Utility: check if table exists */
-  async function tableExists(tableName: string) {
+  async function fetchTeachers() {
     try {
-      const { error: tableError } = await supabase.from(tableName).select('id').limit(1)
-      return !tableError
-    } catch {
-      return false
-    }
-  }
-
-  /** Fetch subjects + teachers */
-  async function fetchSubjectsAndTeachers() {
-    loading.value = true
-    error.value = null
-    try {
-      // ✅ Subjects
-      const { data: sdata, error: sErr } = await supabase
-        .from('subjects')
-        .select('id, code, name, department_id')
-        .order('name', { ascending: true })
-      if (sErr) throw sErr
-      subjects.value = sdata ?? []
-
-      // ✅ Teachers
-      const { data: tdata, error: tErr } = await supabase
+      const { data, error: err } = await supabase
         .from('users')
-        .select('id, full_name, email, role')
+        .select('id, full_name')
+        .eq('role', 'faculty')
         .order('full_name', { ascending: true })
 
-      if (tErr) throw tErr
-      teachers.value = (tdata ?? []).filter(
-        (u) => ['teacher', 'faculty', 'faculty_member'].includes(u.role ?? '')
-      )
+      if (err) throw err
+      teachers.value = (data ?? []) as Teacher[]
     } catch (err: any) {
-      console.error('[fetchSubjectsAndTeachers]', err)
-      error.value = err.message || 'Unable to load teachers or subjects.'
-    } finally {
-      loading.value = false
+      console.error('[fetchTeachers]', err.message ?? err)
     }
   }
 
-  /** Fetch classes + joined data */
-  async function fetchClasses() {
-    loading.value = true
-    error.value = null
+  async function fetchDepartments() {
     try {
-      const { data: rawClasses, error: cErr } = await supabase
-        .from('classes')
-        .select('id, name, section, department_id, teacher_ids')
+      const { data, error: err } = await supabase
+        .from('departments')
+        .select('id, name')
         .order('name', { ascending: true })
-      if (cErr) throw cErr
 
-      const { data: csRows, error: csErr } = await supabase
-        .from('class_subjects')
-        .select('class_id, subject:subjects(id, code, name)')
-      if (csErr) throw csErr
+      if (err) throw err
+      departments.value = (data ?? []) as Department[]
+    } catch (err: any) {
+      console.error('[fetchDepartments]', err.message ?? err)
+    }
+  }
 
-      const hasClassTeachers = await tableExists('class_teachers')
-      let classTeachersMap = new Map<string, UserRecord[]>()
+  async function fetchClasses() {
+    try {
+      loading.value = true
+      const { data, error: err } = await supabase
+        .from('classes')
+        .select(`
+          id,
+          name,
+          section,
+          department_id,
+          departments(name),
+          class_teachers(
+            teacher_id,
+            users(id, full_name)
+          )
+        `)
+        .order('name', { ascending: true })
 
-      if (hasClassTeachers) {
-        const { data: ctRows, error: ctErr } = await supabase
-          .from('class_teachers')
-          .select('class_id, teacher:users(id, full_name, email, role)')
-        if (ctErr) throw ctErr
-        ctRows?.forEach((r: any) => {
-          const cid = r.class_id
-          if (!classTeachersMap.has(cid)) classTeachersMap.set(cid, [])
-          classTeachersMap.get(cid)!.push(r.teacher)
-        })
-      }
-
-      const classSubjectsMap = new Map<string, SubjectRecord[]>()
-      csRows?.forEach((r: any) => {
-        const cid = r.class_id
-        if (!classSubjectsMap.has(cid)) classSubjectsMap.set(cid, [])
-        classSubjectsMap.get(cid)!.push(r.subject)
-      })
+      if (err) throw err
 
       classes.value =
-        rawClasses?.map((c) => ({
-          ...c,
-          teachers: hasClassTeachers
-            ? classTeachersMap.get(c.id) ?? []
-            : teachers.value.filter((t) => (c.teacher_ids ?? []).includes(t.id)),
-          subjects: classSubjectsMap.get(c.id) ?? [],
-        })) ?? []
+        (data ?? []).map((cls: any) => ({
+          id: cls.id,
+          name: cls.name,
+          section: cls.section,
+          department_id: cls.department_id,
+          department_name: cls.departments?.name ?? '',
+          teachers:
+            cls.class_teachers?.map((ct: any) => ({
+              id: ct.users?.id,
+              full_name: ct.users?.full_name,
+            })).filter((t: any) => t.id) ?? [],
+        })) as ClassRecord[]
     } catch (err: any) {
-      console.error('[fetchClasses]', err)
-      error.value = err.message || 'Unable to load classes.'
+      console.error('[fetchClasses]', err.message ?? err)
+      error.value = err.message ?? String(err)
     } finally {
       loading.value = false
     }
   }
 
-  /** Reset form */
-  function resetForm() {
-    form.value = {
-      id: null,
-      name: '',
-      section: '',
-      teacher_ids: [],
-      subject_ids: [],
-      department_id: null,
-    }
-  }
+  /* --------- SAVE / UPDATE CLASS (with teachers) --------- */
 
-  /** Edit mode */
-  function editClass(payload: any) {
-    form.value = {
-      id: payload?.id ?? null,
-      name: payload?.name ?? '',
-      section: payload?.section ?? '',
-      teacher_ids: payload?.teachers?.map((t: any) => t.id) ?? payload?.teacher_ids ?? [],
-      subject_ids: payload?.subjects?.map((s: any) => s.id) ?? [],
-      department_id: payload?.department_id ?? null,
-    }
-  }
-
-  /** Save (add/update) */
-  async function saveClass(edit = false) {
-    loading.value = true
-    error.value = null
-    success.value = null
+  async function saveClass(isEdit: boolean) {
     try {
-      const basePayload = {
-        name: form.value.name?.trim(),
-        section: form.value.section?.trim() || null,
-        department_id: form.value.department_id,
-        teacher_ids: form.value.teacher_ids.length ? form.value.teacher_ids : null,
-      }
+      loading.value = true
+      success.value = null
+      error.value = null
 
-      if (edit && form.value.id) {
-        const { error: upErr } = await supabase
+      let classId: string | undefined
+
+      if (isEdit && form.value.id) {
+        const { error: updateError } = await supabase
           .from('classes')
-          .update(basePayload)
+          .update({
+            name: form.value.name,
+            section: form.value.section,
+            department_id: form.value.department_id || null,
+          })
           .eq('id', form.value.id)
-        if (upErr) throw upErr
-        await upsertClassSubjects(form.value.id, form.value.subject_ids)
-        const hasCT = await tableExists('class_teachers')
-        if (hasCT) await syncClassTeachers(form.value.id, form.value.teacher_ids)
-        success.value = 'Class updated successfully.'
+
+        if (updateError) throw updateError
+        classId = form.value.id
+        success.value = 'Class updated successfully!'
       } else {
-        const { data: inserted, error: insErr } = await supabase
+        const { data, error: insertError } = await supabase
           .from('classes')
-          .insert([basePayload])
+          .insert([
+            {
+              name: form.value.name,
+              section: form.value.section,
+              department_id: form.value.department_id || null,
+            },
+          ])
           .select('id')
           .single()
-        if (insErr) throw insErr
-        const newId = inserted.id
-        await upsertClassSubjects(newId, form.value.subject_ids)
-        const hasCT = await tableExists('class_teachers')
-        if (hasCT) await syncClassTeachers(newId, form.value.teacher_ids)
-        success.value = 'Class created successfully.'
+
+        if (insertError) throw insertError
+        classId = data.id
+        success.value = 'Class created successfully!'
       }
 
+      // Update class_teachers safely
+      if (classId) {
+        await updateClassTeachers(classId, form.value.teachers ?? [])
+      }
+
+      // Refresh list so UI shows assigned teachers immediately
       await fetchClasses()
       resetForm()
     } catch (err: any) {
-      console.error('[saveClass]', err)
-      error.value = err.message || 'Failed to save class.'
+      console.error('[saveClass error]', err)
+      error.value = err.message ?? String(err)
     } finally {
       loading.value = false
     }
   }
 
-  /** Delete class */
-  async function deleteClass(id: string) {
-    if (!id) return
-    loading.value = true
+  /**
+   * Updates the class_teachers for a given classId.
+   * Accepts teacher array of either {id, full_name} or string ids.
+   * Filters invalid/empty values so teacher_id is never null.
+   */
+  async function updateClassTeachers(classId: string, selectedTeachers: TeacherInput[]) {
+    if (!classId) return
+
     try {
-      await supabase.from('class_subjects').delete().eq('class_id', id)
-      const hasCT = await tableExists('class_teachers')
-      if (hasCT) await supabase.from('class_teachers').delete().eq('class_id', id)
-      const { error: cErr } = await supabase.from('classes').delete().eq('id', id)
-      if (cErr) throw cErr
-      success.value = 'Class deleted.'
-      await fetchClasses()
+      // 1) delete existing assignments
+      const { error: delErr } = await supabase.from('class_teachers').delete().eq('class_id', classId)
+      if (delErr) {
+        // don't throw immediately — log and continue, but surface the error
+        console.warn('[updateClassTeachers] delete error', delErr)
+      }
+
+      // 2) normalize selectedTeachers -> array of ids, filter invalid/null/empty
+      const teacherIds = (selectedTeachers ?? [])
+        .map((t) => (typeof t === 'string' ? t : (t as any).id))
+        .filter((id) => typeof id === 'string' && id.length > 0)
+
+      if (teacherIds.length === 0) {
+        // nothing to insert
+        return
+      }
+
+      // build insert payload
+      const payload = teacherIds.map((teacher_id) => ({ class_id: classId, teacher_id }))
+
+      // 3) bulk insert
+      const { error: insertErr } = await supabase.from('class_teachers').insert(payload)
+      if (insertErr) throw insertErr
     } catch (err: any) {
-      console.error('[deleteClass]', err)
-      error.value = err.message || 'Error deleting class.'
-    } finally {
-      loading.value = false
+      console.error('[updateClassTeachers error]', err.message ?? err)
+      // bubble up or set error ref if you want UI to show it
+      error.value = err.message ?? String(err)
+      throw err
     }
   }
 
-  /** Helper: upsert subjects */
-  async function upsertClassSubjects(classId: string, subjectIds: string[]) {
-    await supabase.from('class_subjects').delete().eq('class_id', classId)
-    if (!subjectIds?.length) return
-    const rows = subjectIds.map((sid) => ({ class_id: classId, subject_id: sid }))
-    const { error: insErr } = await supabase.from('class_subjects').insert(rows)
-    if (insErr) throw insErr
+  /* ---------------- DELETE ---------------- */
+
+  async function deleteClass(id: string | undefined) {
+    if (!id) return
+    try {
+      // remove class_teacher relations first
+      const { error: delCT } = await supabase.from('class_teachers').delete().eq('class_id', id)
+      if (delCT) console.warn('[deleteClass] delete class_teachers error', delCT)
+
+      const { error: delClass } = await supabase.from('classes').delete().eq('id', id)
+      if (delClass) throw delClass
+
+      // update reactive array
+      classes.value = classes.value.filter((c) => c.id !== id)
+      success.value = 'Class deleted successfully!'
+    } catch (err: any) {
+      console.error('[deleteClass error]', err)
+      error.value = err.message ?? String(err)
+    }
   }
 
-  /** Helper: sync teachers join */
-  async function syncClassTeachers(classId: string, teacherIds: string[]) {
-    const { error: delErr } = await supabase.from('class_teachers').delete().eq('class_id', classId)
-    if (delErr) console.warn('[syncClassTeachers delete]', delErr.message)
-    if (!teacherIds?.length) return
-    const rows = teacherIds.map((tid) => ({ class_id: classId, teacher_id: tid }))
-    const { error: insErr } = await supabase.from('class_teachers').insert(rows)
-    if (insErr) throw insErr
+  /* ---------------- HELPERS ---------------- */
+
+  function editClass(item: any) {
+    form.value = {
+      id: item.id,
+      name: item.name,
+      section: item.section,
+      department_id: item.department_id,
+      teachers: item.teachers ?? [],
+    }
   }
 
-  /** Initialize on mount */
-  async function init() {
-    await fetchSubjectsAndTeachers()
-    await fetchClasses()
+  function resetForm() {
+    form.value = {
+      name: '',
+      section: '',
+      department_id: null,
+      teachers: [],
+    }
   }
 
+  /* ---------------- INITIAL LOAD ---------------- */
+
+  // expose fetchers so parent page can call onMounted in the page
   return {
     classes,
-    subjects,
     teachers,
+    departments,
     form,
     loading,
     success,
     error,
-    init,
-    fetchSubjectsAndTeachers,
     fetchClasses,
+    fetchTeachers,
+    fetchDepartments,
     saveClass,
     deleteClass,
     editClass,
     resetForm,
+    updateClassTeachers,
   }
 }

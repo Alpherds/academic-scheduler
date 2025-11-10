@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useSupabase } from '@/composables/useSupabase'
 
 export function useDeanDashboard() {
-  const { supabase } = useSupabase()
+  const supabase = useSupabase() // ✅ FIXED: no destructuring
 
   const facultyCount = ref<number>(0)
   const classCount = ref<number>(0)
@@ -18,19 +18,23 @@ export function useDeanDashboard() {
       loading.value = true
       error.value = null
 
+      // ✅ Count data efficiently
       const [faculty, classes, subjects, scheds] = await Promise.all([
-        supabase.from('users').select('id', { count: 'exact' }).eq('role', 'faculty'),
-        supabase.from('classes').select('id', { count: 'exact' }),
-        supabase.from('subjects').select('id', { count: 'exact' }),
+        supabase.from('users').select('id', { count: 'exact', head: true }).eq('role', 'faculty'),
+        supabase.from('classes').select('id', { count: 'exact', head: true }),
+        supabase.from('subjects').select('id', { count: 'exact', head: true }),
         supabase
           .from('schedules')
-          .select(`id, day, start_time, end_time, 
-                   subjects(name), 
-                   classes(name, section), 
-                   rooms(name), 
-                   users(full_name)`),
+          .select(`
+            id, day, start_time, end_time,
+            subjects(name),
+            classes(name, section),
+            rooms(name),
+            users(full_name)
+          `)
       ])
 
+      // ✅ Assign values safely
       facultyCount.value = faculty.count ?? 0
       classCount.value = classes.count ?? 0
       subjectCount.value = subjects.count ?? 0

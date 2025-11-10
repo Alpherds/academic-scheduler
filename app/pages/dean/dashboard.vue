@@ -11,8 +11,15 @@
       </template>
     </PageHeader>
 
-    <DashboardStats :cards="cards" class="mb-8" />
-    <ScheduleTable :schedules="schedules" />
+    <div v-if="!loading">
+      <DashboardStats :cards="cards" class="mb-8" />
+      <ScheduleTable :schedules="schedules" />
+    </div>
+
+    <div v-else class="text-center py-10">
+      <v-progress-circular indeterminate color="primary" />
+      <p class="mt-2">Loading dashboard data...</p>
+    </div>
   </v-container>
 </template>
 
@@ -23,12 +30,15 @@ import PageHeader from '@/components/dean/PageHeader.vue'
 import DashboardStats from '@/components/dean/DashboardStats.vue'
 import ScheduleTable from '@/components/dean/ScheduleTable.vue'
 
+definePageMeta({ ssr: false }) // ✅ Fix hydration mismatch
+
 const {
   facultyCount,
   classCount,
   subjectCount,
   scheduleCount,
   schedules,
+  loading,
   fetchDashboardData
 } = useDeanDashboard()
 
