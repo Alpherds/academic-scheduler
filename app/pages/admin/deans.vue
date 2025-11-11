@@ -214,17 +214,39 @@ async function handleSave() {
   }
 
   try {
+    if (editMode.value && form.value.id) {
+      // 🔧 Update existing dean
+      const res: any = await $fetch('/api/admin/update-dean', {
+        method: 'PUT',
+        body: {
+          id: form.value.id,
+          full_name: form.value.full_name,
+          department_id: form.value.department_id,
+        },
+      })
+
+      if (res?.success) {
+        showAlert('Dean updated successfully.', 'success')
+        dialog.value = false
+        await fetchDeans()
+      } else {
+        showAlert(res?.message || 'Failed to update dean.', 'error')
+      }
+      return
+    }
+
+    // 🆕 Create new dean (existing logic)
     const payload = {
       full_name: form.value.full_name,
       email: form.value.email,
-      password: form.value.password || generateRandomPassword(),
       department_id: form.value.department_id,
+      password: form.value.password || '',
     }
 
     const res: any = await createDean(payload)
 
     if (res?.success) {
-      showAlert('Dean created successfully!', 'success')
+      showAlert(res.message || 'Dean created successfully.', 'success')
       dialog.value = false
       await fetchDeans()
     } else {
@@ -234,6 +256,8 @@ async function handleSave() {
     showAlert(e.message || 'An error occurred.', 'error')
   }
 }
+
+
 
 async function deleteDean() {
   if (!confirmDialog.value.item?.id) return

@@ -1,4 +1,4 @@
-// /composables/admin/useAdminDeans.ts
+// /app/composables/admin/useAdminDeans.ts
 import { ref } from 'vue'
 
 export function useAdminDeans() {
@@ -6,20 +6,23 @@ export function useAdminDeans() {
   const error = ref<string | null>(null)
   const success = ref<string | null>(null)
 
-  async function createDean(payload: { full_name: string; email: string; department_id: string }) {
+  async function createDean(payload: { full_name: string; email: string; department_id: string; password?: string }) {
     loading.value = true
     error.value = null
     success.value = null
+
     try {
-      const res = await $fetch('/api/admin/create-dean', {
+      const res: any = await $fetch('/api/admin/create-dean', {
         method: 'POST',
         body: payload,
       })
-      if ((res as any).error) {
-        error.value = (res as any).error
+
+      if (!res?.success) {
+        error.value = res?.message || 'Failed to create dean.'
         return null
       }
-      success.value = (res as any).success ?? 'Dean created'
+
+      success.value = res.message || 'Dean created successfully.'
       return res
     } catch (e: any) {
       error.value = e?.message ?? String(e)

@@ -5,17 +5,20 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const { currentUser, userRole, init } = useAuthComposable()
   await init()
 
-  // If no user and not on login page -> redirect to login
+  // ✅ Allow password reset page even if user auto-logged in
+  if (to.path.startsWith('/reset-password')) return
+
+  // ✅ If not logged in, redirect to login
   if (!currentUser.value && to.path !== '/login') return navigateTo('/login')
 
-  // If on login and already logged in, redirect by role
+  // ✅ If on login but already logged in → route by role
   if (to.path === '/login' && currentUser.value) {
     if (userRole.value === 'admin') return navigateTo('/admin/dashboard')
     if (userRole.value === 'dean') return navigateTo('/dean/dashboard')
     if (userRole.value === 'faculty') return navigateTo('/faculty/schedules')
   }
 
-  // protect role-specific routes
+  // ✅ Protect role-based routes
   if (to.path.startsWith('/admin') && userRole.value !== 'admin') return navigateTo('/login')
   if (to.path.startsWith('/dean') && userRole.value !== 'dean') return navigateTo('/login')
   if (to.path.startsWith('/faculty') && userRole.value !== 'faculty') return navigateTo('/login')
