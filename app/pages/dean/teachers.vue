@@ -144,6 +144,8 @@
 import { ref, watch, onMounted } from 'vue'
 import { useTeachers } from '~/composables/dean/useTeachers'
 import { useSupabase } from '~/composables/useSupabase'
+import { useAuthComposable } from '~/composables/useAuth'
+const { currentUser } = useAuthComposable()
 
 type AlertType = 'success' | 'error' | 'info' | 'warning'
 
@@ -201,9 +203,10 @@ function closeDialog() {
 }
 
 async function handleSave() {
-  await saveTeacher(editMode.value)
+  await saveTeacher(editMode.value, currentUser.value?.id || '')
   dialog.value = false
 }
+
 
 function confirmDelete(item: any) {
   confirmDialog.value = { show: true, item }

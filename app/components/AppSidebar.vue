@@ -1,7 +1,7 @@
     <template> 
       <v-sheet class="fill-height d-flex flex-column sidebar-wrapper" color="white" >
         <!-- Logo --> <div class="d-flex align-center justify-center py-4 border-b"> 
-          <v-img src="/logo.png" width="42" height="42" contain /> </div> <!-- Navigation --> 
+          <v-img src="/logo.png" max-width="200" contain /> </div> <!-- Navigation --> 
           <transition name="fade"> <v-list nav class="flex-grow-1 overflow-y-auto mt-2">
             <v-list-item v-for="item in items" :key="item.title" :to="item.to" link exact class="sidebar-item" >
     <template #prepend> <v-icon class="sidebar-icon">{{ item.icon }}</v-icon> 
