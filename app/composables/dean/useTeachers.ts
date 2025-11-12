@@ -19,48 +19,71 @@ export function useTeachers() {
     allowed_subjects: [] as any[],
   })
 
+  /* ─── Fetch Subjects ───────────────────────────── */
   async function fetchSubjects() {
     const { data } = await supabase.from('subjects').select('id, name, code').order('code')
     subjects.value = data || []
   }
 
-  async function fetchTeachers() {
-    loading.value = true
-    const { data, error: err } = await supabase
-      .from('users')
-      .select(`
-        id,
-        full_name,
-        email,
-        bio,
-        department_id,
-        role,
-        faculty_subjects (
-          subject_id,
-          subjects ( id, code, name )
-        )
-      `)
-      .eq('role', 'faculty')
-      .order('full_name')
-    loading.value = false
+  /* ─── Fetch Teachers (Filtered by Dean Department) ─────────── */
+  async function fetchTeachers(deanId: string) {
+    try {
+      loading.value = true
+      error.value = null
 
-    if (err) {
+      // 🔹 Get Dean’s department first
+      const { data: deanData, error: deanError } = await supabase
+        .from('users')
+        .select('department_id')
+        .eq('id', deanId)
+        .maybeSingle()
+
+      if (deanError) throw deanError
+      if (!deanData?.department_id)
+        throw new Error('Dean is not assigned to any department.')
+
+      const departmentId = deanData.department_id
+
+      // 🔹 Fetch only teachers from that department
+      const { data, error: err } = await supabase
+        .from('users')
+        .select(`
+          id,
+          full_name,
+          email,
+          bio,
+          department_id,
+          role,
+          faculty_subjects (
+            subject_id,
+            subjects ( id, code, name )
+          )
+        `)
+        .eq('role', 'faculty')
+        .eq('department_id', departmentId)
+        .order('full_name', { ascending: true })
+
+      if (err) throw err
+
+      teachers.value =
+        data?.map((t: any) => ({
+          ...t,
+          allowed_subjects:
+            t.faculty_subjects?.map((fs: any) => ({
+              id: fs.subjects?.id,
+              name: fs.subjects?.name,
+              code: fs.subjects?.code,
+            })) ?? [],
+        })) ?? []
+    } catch (err: any) {
+      console.error('[fetchTeachers Error]', err.message)
       error.value = err.message
-      return
+    } finally {
+      loading.value = false
     }
-
-    teachers.value =
-      data?.map((t: any) => ({
-        ...t,
-        allowed_subjects:
-          t.faculty_subjects?.map((fs: any) => ({
-            id: fs.subjects?.id,
-            name: fs.subjects?.name,
-            code: fs.subjects?.code,
-          })) ?? [],
-      })) ?? []
   }
 
+  /* ─── Save (Create / Update) ───────────────────── */
   async function saveTeacher(isEdit: boolean, deanId: string) {
     loading.value = true
     error.value = null
@@ -84,7 +107,7 @@ export function useTeachers() {
       if (!res.success) throw new Error(res.message)
 
       success.value = res.message
-      await fetchTeachers()
+      await fetchTeachers(deanId)
       resetForm()
     } catch (err: any) {
       error.value = err.message
@@ -93,12 +116,13 @@ export function useTeachers() {
     }
   }
 
-  async function deleteTeacher(id: string) {
+  /* ─── Delete ───────────────────────────────────── */
+  async function deleteTeacher(id: string, deanId: string) {
     const res: any = await $fetch(`/api/dean/delete-teacher?id=${id}`, { method: 'DELETE' })
     if (!res.success) error.value = res.message
     else {
       success.value = res.message
-      teachers.value = teachers.value.filter((t) => t.id !== id)
+      await fetchTeachers(deanId)
     }
   }
 

@@ -30,11 +30,22 @@
       </v-col>
     </v-row>
 
+    <!-- 🔍 Search -->
+    <v-text-field
+      v-model="search"
+      label="Search teachers"
+      variant="outlined"
+      density="comfortable"
+      prepend-inner-icon="mdi-magnify"
+      clearable
+      class="mb-4"
+    />
+
     <!-- TABLE -->
     <v-card>
       <v-data-table
         :headers="headers"
-        :items="teachers"
+        :items="filteredTeachers"
         :loading="loading"
         class="elevation-1"
         density="comfortable"
@@ -99,7 +110,7 @@
                   :search-input.sync="searchSubject"
                   prepend-inner-icon="mdi-magnify"
                   :loading="subjectsLoading"
-                  placeholder="Search subjects..."
+                  placeholder="Search subjects"
                 >
                   <template #chip="{ props, item }">
                     <v-chip
@@ -141,14 +152,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import { useTeachers } from '~/composables/dean/useTeachers'
-import { useSupabase } from '~/composables/useSupabase'
 import { useAuthComposable } from '~/composables/useAuth'
+
 const { currentUser } = useAuthComposable()
-
-type AlertType = 'success' | 'error' | 'info' | 'warning'
-
 const {
   teachers,
   subjects,
@@ -167,21 +175,42 @@ const {
 const dialog = ref(false)
 const editMode = ref(false)
 const confirmDialog = ref({ show: false, item: null as any })
+
+// ✅ Explicit type-safe alert fix
+type AlertType = 'success' | 'error' | 'info' | 'warning'
 const alert = ref<{ show: boolean; type: AlertType; message: string }>({
   show: false,
   type: 'success',
   message: '',
 })
+
+// 🔍 Search
+const search = ref('')
 const searchSubject = ref('')
 const subjectsLoading = ref(false)
 
-watch(success, (val) => val && showAlert(val, 'success'))
-watch(error, (val) => val && showAlert(val, 'error'))
+// Filtered teachers based on search
+const filteredTeachers = computed(() => {
+  if (!search.value.trim()) return teachers.value
+
+  const query = search.value.toLowerCase()
+  return teachers.value.filter((t) => {
+    const nameMatch = t.full_name?.toLowerCase().includes(query)
+    const emailMatch = t.email?.toLowerCase().includes(query)
+    const subjectMatch = t.allowed_subjects?.some((s: any) =>
+      (typeof s === 'string' ? s : s.name)?.toLowerCase().includes(query)
+    )
+    return nameMatch || emailMatch || subjectMatch
+  })
+})
 
 function showAlert(message: string, type: AlertType) {
   alert.value = { show: true, message, type }
   setTimeout(() => (alert.value.show = false), 3000)
 }
+
+watch(success, (val) => val && showAlert(val, 'success'))
+watch(error, (val) => val && showAlert(val, 'error'))
 
 const headers = [
   { title: 'Name', key: 'full_name' },
@@ -207,18 +236,28 @@ async function handleSave() {
   dialog.value = false
 }
 
-
 function confirmDelete(item: any) {
   confirmDialog.value = { show: true, item }
 }
 
 async function handleDelete() {
-  await deleteTeacher(confirmDialog.value.item?.id)
+  await deleteTeacher(confirmDialog.value.item?.id, currentUser.value?.id || '')
   confirmDialog.value.show = false
 }
 
-onMounted(() => {
-  fetchSubjects()
-  fetchTeachers()
+onMounted(async () => {
+  await fetchSubjects()
+  await fetchTeachers(currentUser.value?.id || '')
 })
 </script>
+
+<style scoped>
+.v-card {
+  border-radius: 12px;
+  transition: all 0.2s ease-in-out;
+}
+.v-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+</style>

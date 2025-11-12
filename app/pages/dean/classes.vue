@@ -30,11 +30,22 @@
       </v-col>
     </v-row>
 
+    <!-- 🔍 Search Bar -->
+    <v-text-field
+      v-model="search"
+      label="Search classes"
+      variant="outlined"
+      density="comfortable"
+      prepend-inner-icon="mdi-magnify"
+      clearable
+      class="mb-4"
+    />
+
     <!-- TABLE -->
     <v-card>
       <v-data-table
         :headers="headers"
-        :items="classes"
+        :items="filteredClasses"
         :loading="loading"
         class="elevation-1"
         density="comfortable"
@@ -129,7 +140,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
 import { useClasses } from '~/composables/dean/useClasses'
 
 type AlertType = 'success' | 'error' | 'info' | 'warning'
@@ -158,6 +169,24 @@ const alert = ref<{ show: boolean; type: AlertType; message: string }>({
   show: false,
   type: 'success',
   message: '',
+})
+
+// 🔍 Search
+const search = ref('')
+
+// Filter classes based on search text
+const filteredClasses = computed(() => {
+  if (!search.value.trim()) return classes.value
+  const query = search.value.toLowerCase()
+  return classes.value.filter((cls) => {
+    const nameMatch = cls.name?.toLowerCase().includes(query)
+    const sectionMatch = cls.section?.toLowerCase().includes(query)
+    const deptMatch = cls.department_name?.toLowerCase().includes(query)
+    const teacherMatch = cls.teachers?.some((t) =>
+      t.full_name?.toLowerCase().includes(query)
+    )
+    return nameMatch || sectionMatch || deptMatch || teacherMatch
+  })
 })
 
 watch(success, (val) => val && showAlert(val, 'success'))
@@ -207,3 +236,14 @@ onMounted(async () => {
   await fetchDepartments()
 })
 </script>
+
+<style scoped>
+.v-card {
+  border-radius: 12px;
+  transition: all 0.2s ease-in-out;
+}
+.v-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+</style>

@@ -30,11 +30,22 @@
       </v-col>
     </v-row>
 
+    <!-- 🔍 Search Bar -->
+    <v-text-field
+      v-model="search"
+      label="Search subjects..."
+      variant="outlined"
+      density="comfortable"
+      prepend-inner-icon="mdi-magnify"
+      clearable
+      class="mb-4"
+    />
+
     <!-- SUBJECTS TABLE -->
     <v-card>
       <v-data-table
         :headers="headers"
-        :items="subjects"
+        :items="filteredSubjects"
         :loading="loading"
         class="elevation-1"
         density="comfortable"
@@ -114,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
 import { useSubjects } from '~/composables/dean/useSubjects'
 
 type AlertType = 'success' | 'error' | 'info' | 'warning'
@@ -141,13 +152,9 @@ const alert = ref<{ show: boolean; type: AlertType; message: string }>({
   message: '',
 })
 
-/* ✅ Reactive alerts (same as periods.vue) */
-watch(success, (val) => {
-  if (val) showAlert(val, 'success')
-})
-watch(error, (val) => {
-  if (val) showAlert(val, 'error')
-})
+/* ✅ Reactive alerts */
+watch(success, (val) => val && showAlert(val, 'success'))
+watch(error, (val) => val && showAlert(val, 'error'))
 
 function showAlert(message: string, type: AlertType) {
   alert.value = { show: true, message, type }
@@ -160,6 +167,20 @@ const headers = [
   { title: 'Units', key: 'units' },
   { title: 'Actions', key: 'actions', sortable: false },
 ]
+
+/* 🔍 Search Logic */
+const search = ref('')
+const filteredSubjects = computed(() => {
+  if (!search.value.trim()) return subjects.value
+  const query = search.value.toLowerCase()
+  return subjects.value.filter((subj) => {
+    return (
+      subj.code.toLowerCase().includes(query) ||
+      subj.name.toLowerCase().includes(query) ||
+      String(subj.units).includes(query)
+    )
+  })
+})
 
 /* ✅ Dialog controls */
 function openDialog(isEdit: boolean, item?: any) {
