@@ -1,144 +1,140 @@
 <template>
-  <div>
-    <div class="d-flex justify-space-between align-center mb-6">
-      <h1 class="text-h5 font-weight-bold">Schedules</h1>
-      <v-btn color="primary" @click="openDialog()">
-        <v-icon left>mdi-plus</v-icon>Add Schedule
-      </v-btn>
-    </div>
+  <v-container fluid class="pa-6">
+    <PageHeader title="Schedules" subtitle="Create and review class & teacher schedules" />
 
-    <v-card class="pa-4 mb-6">
-      <v-data-table :headers="headers" :items="schedules" class="elevation-1">
-        <template #item.actions="{ item }">
-          <v-btn icon color="primary" variant="text" @click="edit(item)">
-            <v-icon>mdi-pencil</v-icon>
-          </v-btn>
-          <v-btn icon color="error" variant="text" @click="remove(item.id)">
-            <v-icon>mdi-delete</v-icon>
-          </v-btn>
-        </template>
-      </v-data-table>
-    </v-card>
+    <v-row class="mb-4 align-center">
+      <v-col cols="12" md="4">
+        <v-select
+          v-model="filter.type"
+          :items="['All', 'By Class', 'By Teacher']"
+          label="View mode"
+          density="comfortable"
+        />
+      </v-col>
 
-    <!-- Dialog -->
-    <v-dialog v-model="dialog" max-width="700">
-      <v-card>
-        <v-card-title>{{ editMode ? 'Edit Schedule' : 'Add Schedule' }}</v-card-title>
-        <v-card-text>
-          <v-form>
-            <v-select v-model="form.class_id" :items="classOptions" label="Class" />
-            <v-select v-model="form.subject_id" :items="subjectOptions" label="Subject" />
-            <v-select v-model="form.teacher_id" :items="teacherOptions" label="Teacher" />
-            <v-select v-model="form.day" :items="days" label="Day" />
-            <v-text-field v-model="form.start_time" label="Start Time (HH:MM)" />
-            <v-text-field v-model="form.end_time" label="End Time (HH:MM)" />
-          </v-form>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn text @click="dialog = false">Cancel</v-btn>
-          <v-btn color="primary" @click="save">Save</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-  </div>
+      <v-col cols="12" md="4">
+        <v-autocomplete
+          v-if="filter.type !== 'All'"
+          v-model="filter.selected"
+          :items="filterItems"
+          item-title="display"
+          item-value="id"
+          :label="filter.type === 'By Class' ? 'Select Class' : 'Select Teacher'"
+          clearable
+          density="comfortable"
+        />
+      </v-col>
+
+      <v-col cols="12" md="4" class="text-md-end">
+        <v-btn color="primary" @click="openAddDialog" prepend-icon="mdi-plus">
+          Add Schedule
+        </v-btn>
+      </v-col>
+    </v-row>
+
+    <ScheduleGrid
+      :periods="periods"
+      :schedules="visibleSchedules"
+      :classes="classes"
+      :teachers="teachers"
+      :subjects="subjects"
+      @edit="openEditDialog"
+      @delete="confirmDelete"
+    />
+
+    <AddScheduleDialog
+      v-model:show="dialog"
+      :editing="editing"
+      :periods="periods"
+      :classes="classes"
+      :teachers="teachers"
+      :subjects="subjects"
+      @saved="onSaved"
+    />
+  </v-container>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { useSupabase } from '~/composables/useSupabase'
+import { ref, computed, onMounted } from 'vue'
+import PageHeader from '~/components/dean/PageHeader.vue'
+import ScheduleGrid from '~/components/ScheduleGrid.vue'
+import AddScheduleDialog from '~/components/AddScheduleDialog.vue'
+import { useSchedules } from '~/composables/dean/useSchedules'
+import { useToaster } from '~/composables/useToaster'
 
-interface Schedule {
-  id?: string
-  class_id: string
-  subject_id: string
-  teacher_id: string
-  day: string
-  start_time: string
-  end_time: string
+interface FilterState {
+  type: 'All' | 'By Class' | 'By Teacher'
+  selected: string | null
 }
 
-const supabase = useSupabase()
-const schedules = ref<Schedule[]>([])
-const classOptions = ref<any[]>([])
-const subjectOptions = ref<any[]>([])
-const teacherOptions = ref<any[]>([])
-const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+const { 
+  periods, schedules, classes, teachers, subjects,
+  fetchAll, createSchedule, updateSchedule, deleteSchedule
+} = useSchedules()
+
+const { toast } = useToaster()
 
 const dialog = ref(false)
-const editMode = ref(false)
-const form = reactive<Schedule>({
-  class_id: '',
-  subject_id: '',
-  teacher_id: '',
-  day: 'Monday',
-  start_time: '07:00',
-  end_time: '08:00',
+const editing = ref<any>(null)
+
+const filter = ref<FilterState>({
+  type: 'All',
+  selected: null,
 })
 
-const headers = [
-  { title: 'Class', key: 'class_id' },
-  { title: 'Subject', key: 'subject_id' },
-  { title: 'Teacher', key: 'teacher_id' },
-  { title: 'Day', key: 'day' },
-  { title: 'Time', key: 'start_time' },
-  { title: 'Actions', key: 'actions' },
-]
-
-async function load() {
-  const { data } = await supabase.from('schedules').select('*')
-  schedules.value = data ?? []
-}
-
-async function loadOptions() {
-  const [classes, subjects, teachers] = await Promise.all([
-    supabase.from('classes').select('id, name'),
-    supabase.from('subjects').select('id, name'),
-    supabase.from('users').select('id, full_name').eq('role', 'faculty'),
-  ])
-  classOptions.value = classes.data?.map(c => ({ title: c.name, value: c.id })) ?? []
-  subjectOptions.value = subjects.data?.map(s => ({ title: s.name, value: s.id })) ?? []
-  teacherOptions.value = teachers.data?.map(t => ({ title: t.full_name, value: t.id })) ?? []
-}
-
-function openDialog() {
-  editMode.value = false
-  Object.assign(form, {
-    class_id: '',
-    subject_id: '',
-    teacher_id: '',
-    day: 'Monday',
-    start_time: '07:00',
-    end_time: '08:00',
-  })
-  dialog.value = true
-}
-
-function edit(item: Schedule) {
-  editMode.value = true
-  Object.assign(form, item)
-  dialog.value = true
-}
-
-async function save() {
-  if (editMode.value && form.id) {
-    await supabase.from('schedules').update(form).eq('id', form.id)
-  } else {
-    await supabase.from('schedules').insert([form])
+const filterItems = computed(() => {
+  if (filter.value.type === 'By Class') {
+    return classes.value.map((c: any) => ({ id: c.id, display: `${c.name} ${c.section || ''}` }))
   }
-  dialog.value = false
-  await load()
-}
-
-async function remove(id: string | undefined) {
-  if (!id) return
-  if (!confirm('Delete this schedule?')) return
-  await supabase.from('schedules').delete().eq('id', id)
-  await load()
-}
-
-onMounted(async () => {
-  await load()
-  await loadOptions()
+  if (filter.value.type === 'By Teacher') {
+    return teachers.value.map((t: any) => ({ id: t.id, display: t.full_name }))
+  }
+  return []
 })
+
+const visibleSchedules = computed(() => {
+  if (filter.value.type === 'All') return schedules.value
+  if (!filter.value.selected) return []
+  if (filter.value.type === 'By Class') {
+    return schedules.value.filter((s: any) => s.class_id === filter.value.selected)
+  }
+  return schedules.value.filter((s: any) => s.teacher_id === filter.value.selected)
+})
+
+function openAddDialog() {
+  editing.value = null
+  dialog.value = true
+}
+
+function openEditDialog(item: any) {
+  editing.value = item
+  dialog.value = true
+}
+
+async function confirmDelete(item: any) {
+  if (!item?.id) return
+  if (!confirm(`Delete schedule for ${item.day} ${item.start_time} - ${item.end_time}?`)) return
+  const { error } = await deleteSchedule(item.id)
+  if (error) toast(error, 'error')
+  else toast('Schedule deleted', 'success')
+}
+
+async function onSaved(result: { action: string; payload: any }) {
+  try {
+    if (result.action === 'create') {
+      const { error } = await createSchedule(result.payload)
+      if (error) toast(error, 'error')
+      else toast('Schedule created', 'success')
+    } else if (result.action === 'update') {
+      const { error } = await updateSchedule(result.payload.id, result.payload)
+      if (error) toast(error, 'error')
+      else toast('Schedule updated', 'success')
+    }
+    dialog.value = false
+  } catch (e: any) {
+    toast(e.message, 'error')
+  }
+}
+
+onMounted(fetchAll)
 </script>
